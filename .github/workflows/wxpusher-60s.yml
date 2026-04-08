@@ -2,21 +2,22 @@ name: wxpusher-60s
 
 on:
   schedule:
-    # UTC 02:00 = Asia/Shanghai 10:00
     - cron: '0 2 * * *'
   workflow_dispatch:
 
 jobs:
   push-news:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     permissions:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '22'
 
