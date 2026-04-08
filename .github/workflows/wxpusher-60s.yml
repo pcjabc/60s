@@ -13,17 +13,17 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-      uses: actions/checkout@v4
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '22'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
 
       - name: Push 60s news to WxPusher
-      env:
-        NEWS_API_BASE: ${{ secrets.NEWS_API_BASE }}
-        WXPUSHER_APP_TOKEN: ${{ secrets.WXPUSHER_APP_TOKEN }}
-        WXPUSHER_UIDS: ${{ secrets.WXPUSHER_UIDS }}
-        WXPUSHER_TOPIC_IDS: ${{ secrets.WXPUSHER_TOPIC_IDS }}
-      run: node scripts/push-wxpusher.mjs
+        env:
+          NEWS_API_BASE: ${{ secrets.NEWS_API_BASE }}
+          WXPUSHER_APP_TOKEN: ${{ secrets.WXPUSHER_APP_TOKEN }}
+          WXPUSHER_UIDS: ${{ secrets.WXPUSHER_UIDS }}
+          WXPUSHER_TOPIC_IDS: ${{ secrets.WXPUSHER_TOPIC_IDS }}
+        run: node scripts/push-wxpusher.mjs
