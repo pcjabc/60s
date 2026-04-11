@@ -2,8 +2,8 @@ const API_BASE = process.env.NEWS_API_BASE || 'https://60s.2173781196.workers.de
 const WXPUSHER_APP_TOKEN = process.env.WXPUSHER_APP_TOKEN
 const WXPUSHER_UIDS = process.env.WXPUSHER_UIDS || ''
 const WXPUSHER_TOPIC_IDS = process.env.WXPUSHER_TOPIC_IDS || ''
-/** 设为 1 时在正文里内嵌 <img>（部分微信/WebView 会长期缓存首图，手机端可能不刷新） */
-const WXPUSHER_EMBED_IMAGE = process.env.WXPUSHER_EMBED_IMAGE === '1'
+/** 设为 0 时去掉正文里的 <img>，只保留链接 */
+const WXPUSHER_EMBED_IMAGE = process.env.WXPUSHER_EMBED_IMAGE !== '0'
 
 if (!WXPUSHER_APP_TOKEN) {
   throw new Error('Missing env: WXPUSHER_APP_TOKEN')
@@ -21,8 +21,30 @@ function parseCsv(value) {
 }
 
 function cacheBustQuery() {
-  // 绕过：① Worker 内对「当天」JSON 的内存缓存 ② 中间层对固定 URL 的缓存
   return `force-update&_=${Date.now()}`
+}
+
+function withBustOnUrl(url, bustValue) {
+  if (!url || !url.startsWith('http')) return url
+  const sep = url.includes('?') ? '&' : '?'
+  return `${url}${sep}_=${bustValue}`
+}
+
+/** 直连图床（接口 JSON 里的 image），浏览器/微信里通常比 worker 二进制代理更稳 */
+function resolveImageUrls(news, bust) {
+  const t = Date.now()
+  const direct = typeof news.image === 'string' && news.image.startsWith('http') ? news.image : ''
+  const viaRedirect = `${API_BASE}/v2/60s?encoding=image&${bust}`
+  const viaProxy = `${API_BASE}/v2/60s?encoding=image-proxy&${bust}`
+
+  return {
+    /** 内嵌 <img>：优先直连 + 时间戳防缓存 */
+    embedSrc: direct ? withBustOnUrl(direct, t) : viaProxy,
+    /** 用户点击「在浏览器打开」：直连优先，否则走 API 302 到图床 */
+    browserHref: direct ? withBustOnUrl(direct, t) : viaRedirect,
+    /** 备用：代理直出 */
+    proxyHref: viaProxy,
+  }
 }
 
 async function getDailyNews() {
@@ -69,25 +91,26 @@ async function pushToWxPusher(content, summary) {
 
 function buildHtml(news) {
   const bust = cacheBustQuery()
+  const { embedSrc, browserHref, proxyHref } = resolveImageUrls(news, bust)
   const dateText = news.day_of_week ? `${news.date} ${news.day_of_week}` : news.date
-  const imageUrl = `${API_BASE}/v2/60s?encoding=image-proxy&${bust}`
   const textUrl = `${API_BASE}/v2/60s?encoding=text&${bust}`
   const sourceUrl = news.link || `${API_BASE}/v2/60s?${bust}`
 
   const embedImg = WXPUSHER_EMBED_IMAGE
-    ? `<p><img src="${imageUrl}" alt="60s ${news.date}" referrerpolicy="no-referrer" /></p>`
-    : `<p><small>若链接点开正常但缩略图不更新，是客户端缓存内嵌图导致，请点上面按钮用浏览器查看。</small></p>`
+    ? `<p><img src="${embedSrc}" alt="每天60秒 ${news.date}" referrerpolicy="no-referrer" style="max-width:100%;height:auto;" /></p>`
+    : ''
 
   return `
 <h2>📰 每天60秒看世界（${dateText}）</h2>
-<p><strong><a href="${imageUrl}">点这里打开今日图片（${news.date}）</a></strong></p>
+<p><strong><a href="${browserHref}" target="_blank" rel="noopener noreferrer">浏览器打开今日图片</a></strong></p>
 ${embedImg}
+<p><a href="${proxyHref}" target="_blank" rel="noopener noreferrer">备用：API 图片代理</a></p>
 <p>${news.tip || ''}</p>
 <p>
-  <a href="${textUrl}">文本版</a> |
-  <a href="${sourceUrl}">原文来源</a>
+  <a href="${textUrl}" target="_blank" rel="noopener noreferrer">文本版</a> |
+  <a href="${sourceUrl}" target="_blank" rel="noopener noreferrer">原文来源</a>
 </p>
-<p><small>图片直链（可复制到浏览器）：<br/>${imageUrl}</small></p>
+<p><small>图片地址（可复制）：<br/>${browserHref}</small></p>
 `.trim()
 }
 
@@ -101,6 +124,7 @@ async function main() {
     message: result.msg,
     data: result.data,
     date: news.date,
+    embedImage: WXPUSHER_EMBED_IMAGE,
   })
 }
 
