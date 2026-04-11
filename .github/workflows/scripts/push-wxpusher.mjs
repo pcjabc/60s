@@ -2,6 +2,8 @@ const API_BASE = process.env.NEWS_API_BASE || 'https://60s.2173781196.workers.de
 const WXPUSHER_APP_TOKEN = process.env.WXPUSHER_APP_TOKEN
 const WXPUSHER_UIDS = process.env.WXPUSHER_UIDS || ''
 const WXPUSHER_TOPIC_IDS = process.env.WXPUSHER_TOPIC_IDS || ''
+/** 设为 1 时在正文里内嵌 <img>（部分微信/WebView 会长期缓存首图，手机端可能不刷新） */
+const WXPUSHER_EMBED_IMAGE = process.env.WXPUSHER_EMBED_IMAGE === '1'
 
 if (!WXPUSHER_APP_TOKEN) {
   throw new Error('Missing env: WXPUSHER_APP_TOKEN')
@@ -41,11 +43,11 @@ async function getDailyNews() {
   return json.data
 }
 
-async function pushToWxPusher(content) {
+async function pushToWxPusher(content, summary) {
   const body = {
     appToken: WXPUSHER_APP_TOKEN,
     contentType: 2,
-    summary: '每天60秒看世界',
+    summary,
     topicIds: parseCsv(WXPUSHER_TOPIC_IDS).map((v) => Number(v)).filter((n) => Number.isFinite(n)),
     uids: parseCsv(WXPUSHER_UIDS),
     content,
@@ -72,22 +74,28 @@ function buildHtml(news) {
   const textUrl = `${API_BASE}/v2/60s?encoding=text&${bust}`
   const sourceUrl = news.link || `${API_BASE}/v2/60s?${bust}`
 
+  const embedImg = WXPUSHER_EMBED_IMAGE
+    ? `<p><img src="${imageUrl}" alt="60s ${news.date}" referrerpolicy="no-referrer" /></p>`
+    : `<p><small>若链接点开正常但缩略图不更新，是客户端缓存内嵌图导致，请点上面按钮用浏览器查看。</small></p>`
+
   return `
 <h2>📰 每天60秒看世界（${dateText}）</h2>
-<p><a href="${imageUrl}">点击查看今日图片版</a></p>
-<p><img src="${imageUrl}" alt="60s 今日新闻图" referrerpolicy="no-referrer" /></p>
+<p><strong><a href="${imageUrl}">点这里打开今日图片（${news.date}）</a></strong></p>
+${embedImg}
 <p>${news.tip || ''}</p>
 <p>
   <a href="${textUrl}">文本版</a> |
   <a href="${sourceUrl}">原文来源</a>
 </p>
+<p><small>图片直链（可复制到浏览器）：<br/>${imageUrl}</small></p>
 `.trim()
 }
 
 async function main() {
   const news = await getDailyNews()
   const content = buildHtml(news)
-  const result = await pushToWxPusher(content)
+  const summary = `每天60秒 · ${news.date}`
+  const result = await pushToWxPusher(content, summary)
 
   console.log('Push success:', {
     message: result.msg,
