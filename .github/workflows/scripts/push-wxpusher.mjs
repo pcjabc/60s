@@ -18,10 +18,16 @@ function parseCsv(value) {
     .filter(Boolean)
 }
 
+function cacheBustQuery() {
+  // 绕过：① Worker 内对「当天」JSON 的内存缓存 ② 中间层对固定 URL 的缓存
+  return `force-update&_=${Date.now()}`
+}
+
 async function getDailyNews() {
-  const url = `${API_BASE}/v2/60s`
+  const url = `${API_BASE}/v2/60s?${cacheBustQuery()}`
   const res = await fetch(url, {
     headers: { Accept: 'application/json' },
+    cache: 'no-store',
   })
 
   if (!res.ok) {
@@ -60,10 +66,11 @@ async function pushToWxPusher(content) {
 }
 
 function buildHtml(news) {
+  const bust = cacheBustQuery()
   const dateText = news.day_of_week ? `${news.date} ${news.day_of_week}` : news.date
-  const imageUrl = `${API_BASE}/v2/60s?encoding=image-proxy`
-  const textUrl = `${API_BASE}/v2/60s?encoding=text`
-  const sourceUrl = news.link || `${API_BASE}/v2/60s`
+  const imageUrl = `${API_BASE}/v2/60s?encoding=image-proxy&${bust}`
+  const textUrl = `${API_BASE}/v2/60s?encoding=text&${bust}`
+  const sourceUrl = news.link || `${API_BASE}/v2/60s?${bust}`
 
   return `
 <h2>📰 每天60秒看世界（${dateText}）</h2>
