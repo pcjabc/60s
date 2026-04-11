@@ -17,6 +17,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      # 仓库 package.json 含 "packageManager": "pnpm@..." 时，setup-node 会走 pnpm/Corepack；
+      # 本 job 只跑脚本、不装依赖，禁用 Corepack 避免误找 pnpm。
+      - name: Disable Corepack for this job
+        run: corepack disable || true
+
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
